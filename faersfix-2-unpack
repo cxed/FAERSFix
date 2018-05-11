@@ -1,0 +1,85 @@
+#!/bin/bash
+# faers_unpack - Chris Edwards - 2016-08-17
+#
+# This program will take as arguments a list of unmodified original
+# zip files that were downloaded from the FDA and unpack them.
+# For example, this will unpack all data received by `faers_acquire`.
+#     faers_unpack /data/faers/all/dw/*aers_2*.zip
+# The original zip files should remain unmodified.
+
+# The script will create a new directory and put the extracted files
+# in it.
+# Define the directory where the final extracted files will go here.
+NEWD=./original_faers_tables
+
+# Prepare a temporary safe directory because unzipping sloppy archives
+# can make a mess.
+TDIR=$(mktemp -p. -d)
+
+for F in $@
+do
+    # -a is to convert to Unix line endings.
+    # -aa is to force convert - some (eg RPSR13Q1.txt) were archived as binary!
+    # -d is the destination directory to extract to.
+    # -x is exclude patterns. Only the text files are of interest.
+    # Note the asci* is needed because the FDA does both 'ascii' and 'asci'.
+    CMD="unzip -aa ${F}  -d ${TDIR} -x *doc *pdf asci*/STAT* *SIZE*TXT"
+    echo ${CMD}
+    eval ${CMD}
+done
+
+A="${TDIR}/ascii"
+
+# Checking for assinine directory name mistakes.
+# Amazingly, FDA typos many variants of the directory "ascii". All of
+# these must be checked and if they exist, their contents need to be
+# put into the correctly spelled directory.
+for N in ASCII asci asii
+do
+    if [ -d "${TDIR}/${N}" ]
+    then
+        if [ ! -d "${A}" ]
+        then
+            echo "Creating ${A} because this zip file was horribly botched."
+            mkdir ${A}
+        fi
+    # Move all the files from the bogus ascii dir into the correctly spelled one.
+    mv ${TDIR}/${N}/* ${A}
+    fi
+done
+
+echo "Converting all file names to lower case...."
+# Shockingly in 2012Q4 the FDA used lower case just the once
+# (demo12q4.txt, etc.). Since that must be converted, here is a good
+# time to convert all the file names to match.
+for F in $(find ${A} -iname *TXT -exec basename '{}' \;)
+do
+    LC=${A}/${F,,}
+    if [ "${A}/${F}" != "${LC}" ]
+    then
+        mv ${A}/${F} ${LC}
+    fi
+done
+
+# Was the `ascii` directory created in the temp directory properly?
+if [ -d "${A}" ]
+then
+    mkdir ${NEWD}
+    mv ${A}/* ${NEWD}
+    # -----------------------------------------------------------
+    # This formerly converted from DOS formatting. Now unzip does
+    # this when unpacking with `-aa`. Kept here for reference.
+    #for F in ${A}/*.txt
+    #do
+        #echo "Converting DOS line ending: ${F}"
+        # Combine file move with sed cleaning the DOS ^M line end stench.
+        #sed 's/.$//' ${F} > ${NEWD}/$(basename ${F})
+    #done
+    # -----------------------------------------------------------
+fi
+
+# The temp dir should be empty now.
+rm -r ${TDIR}
+
+echo "Data extracted into: ${NEWD}"
+

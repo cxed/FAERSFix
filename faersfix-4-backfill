@@ -1,0 +1,281 @@
+#!/bin/bash
+read -d '' USAGE <<"ENDUSAGE"
+Usage: faers_backfill file1 file2 ... fileN
+
+faers_backfill - Chris Edwards - 2016-08-18
+
+This program is designed to homogenize the original FDA AERS/FAERS
+data by modifying original text tables so that they have a consistent
+table field structure. The input of the program is one or more text
+file names. The files contain `$` separated fields of AERS/FAERS data.
+These are the files that `faers_unpack` produces from the original FDA
+zip archives. The program creates new backfilled files. If the
+original files specified are in a different directory, then the new
+filled files are created in the current directory with the same name.
+If the original files are in the current directory, they are renamed
+to be ????YYqQ.txt.orig and the specified names will contain the filled
+files.
+
+Any kind of table files (DRUG, DEMO, INDI, etc) can be submitted.
+The program works by checking the first line of the file which must
+be an unmodified header from the FDA data. These headers are
+compared with a collection of headers which are each mapped to some
+kind of corrective action. All of the known variations until 2016q1
+should be understood by this program. 
+
+Obviously if the formats change after 2016q1, the rules will have
+to be revisited.
+
+Just for reference, on a weak computer this script processed the
+entire data set until 2016q1 in less than 15 minutes.
+ENDUSAGE
+
+# ======================== COLUMN CORRECTION RULES ========================
+# This section defines profiles of possible header formats and also
+# how to fix them. In other words, if header H is found, apply fix F.
+# The fix is the argument part of an awk printf function. This makes
+# it easy to specify the fix - just list all of the columns you want
+# to include in the fixed version. Columns are listed in the normal
+# awk way of $1 for the first column, $2 for the second, etc. Separate
+# by commas. If a column needs to be deleted, simply don't include it
+# (e.g. "$1,$2,$4"). If a blank column needs to be added to backfill
+# old data to make it consistent with new data, use an "X" to
+# represent the new blank column which awk will add (e.g. "$1,X,$2").
+# To signify that a header is in the correct form of the latest files,
+# specify the fix string as "$0" which, in awk, stands for the
+# unmodified contents of the entire line.
+# 
+# The header definitions that are looked for come directly from the
+# first lines of the original FDA ascii files.
+# 
+# The index keys of the arrays indicate the particular file this
+# header is found in last (chronologically). So if it's "H[demo14q2]"
+# that means this header is valid for the demographics file until the
+# 2nd quarter of 2014. After that, presumably, it changes to some
+# other format with a different header.
+# 
+# Map of possible headers (H)
+declare -A H
+# Map of necessary fixes (F)
+declare -A F
+# == DEMO ==
+H[demo05q2]='primaryid$case$i_f_cod$foll_seq$image$event_dt$mfr_dt$fda_dt$rept_cod$mfr_num$mfr_sndr$age$age_cod$gndr_cod$e_sub$wt$wt_cod$rept_dt$occp_cod$death_dt$to_mfr$confid'
+#            1         2    3       4        5     6        7      8      9        10      11       12  13      14       15    16 17     18      19       20       21     22    
+# 1 2 4 3 6 7 (+init_fda_dt) 8 9 (+auth_num) 10 11 (+lit_ref) 12 13 (+age_grp) 14 15 16 17 18 21 19 (+reporter_country) (+occr_country)
+F[demo05q2]='$1,$2,$4,$3,$6,$7,X,$8,$9,X,$10,$11,X,$12,$13,X,$14,$15,$16,$17,$18,$21,$19,X,X'
+#    NOTE: Is `case` the same as `caseid`? Assuming yes.
+#    NOTE: Is `foll_seq` (follow-up sequence) the same as `caseversion`? Assuming yes.
+#    NOTE: `image`, `confid`, `death_dt` fields are lost.
+
+H[demo12q3]='primaryid$case$i_f_cod$foll_seq$image$event_dt$mfr_dt$fda_dt$rept_cod$mfr_num$mfr_sndr$age$age_cod$gndr_cod$e_sub$wt$wt_cod$rept_dt$occp_cod$death_dt$to_mfr$confid$reporter_country'
+#            1         2    3       4        5     6        7      8      9        10      11       12  13      14       15    16 17     18      19       20       21     22     23
+# 1 2 4 3 6 7 (+init_fda_dt) 8 9 (+auth_num) 10 11 (+lit_ref) 12 13 (+age_grp) 14 15 16 17 18 21 19 23 (+occr_country)
+F[demo12q3]='$1,$2,$4,$3,$6,$7,X,$8,$9,X,$10,$11,X,$12,$13,X,$14,$15,$16,$17,$18,$21,$19,$23,X'
+#    NOTE: Is `case` the same as `caseid`? Assuming yes.
+#    NOTE: Is `foll_seq` (follow-up sequence) the same as `caseversion`? Assuming yes.
+#    NOTE: `image`, `confid`, `death_dt` fields are lost.
+
+H[demo14q2]='primaryid$caseid$caseversion$i_f_code$event_dt$mfr_dt$init_fda_dt$fda_dt$rept_cod$mfr_num$mfr_sndr$age$age_cod$gndr_cod$e_sub$wt$wt_cod$rept_dt$to_mfr$occp_cod$reporter_country$occr_country'
+#            1         2      3           4        5        6      7           8      9        10      11       12  13      14       15    16 17     18      19     20       21               22 
+# 1 2 3 4 5 6 7 8 9 (+auth_num) 10 11 (+lit_ref) 12 13 (+age_grp) 14 15 16 17 18 19 20 21 22
+F[demo14q2]='$1,$2,$3,$4,$5,$6,$7,$8,$9,X,$10,$11,X,$12,$13,X,$14,$15,$16,$17,$18,$19,$20,$21,$22'
+
+H[demo16q1]='primaryid$caseid$caseversion$i_f_code$event_dt$mfr_dt$init_fda_dt$fda_dt$rept_cod$auth_num$mfr_num$mfr_sndr$lit_ref$age$age_cod$age_grp$sex$e_sub$wt$wt_cod$rept_dt$to_mfr$occp_cod$reporter_country$occr_country'
+#            1         2      3           4        5        6      7           8      9        10       11      12       13      14  15      16      17  18    19 20     21      22     23       24               25
+F[demo16q1]='$0'
+
+# == DRUG ==
+H[drug12q3]='primaryid$drug_seq$role_cod$drugname$val_vbm$route$dose_vbm$dechal$rechal$lot_num$exp_dt$nda_num'
+#            1         2        3        4        5       6     7        8      9      10      11     12
+# 1 (+caseid) 2 3 4 (+prod_ai) 5 6 7 (+cum_dose_chr) (+cum_dose_unit) 8 9 10 11 12 (+dose_amt) (+dose_unit) (+dose_form) (+dose_freq)
+F[drug12q3]='$1,X,$2,$3,$4,X,$5,$6,$7,X,X,$8,$9,$10,$11,$12,X,X,X,X'
+
+H[drug14q2]='primaryid$caseid$drug_seq$role_cod$drugname$val_vbm$route$dose_vbm$cum_dose_chr$cum_dose_unit$dechal$rechal$lot_num$exp_dt$nda_num$dose_amt$dose_unit$dose_form$dose_freq'
+#            1         2      3        4        5        6       7     8        9            10            11     12     13      14     15      16       17        18        19
+# 1 2 3 4 5 (+prod_ai) 6 7 8 9 10 11 12 13 14 15 16 17 18 19
+F[drug14q2]='$1,$2,$3,$4,$5,X,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19'
+
+H[drug16q1]='primaryid$caseid$drug_seq$role_cod$drugname$prod_ai$val_vbm$route$dose_vbm$cum_dose_chr$cum_dose_unit$dechal$rechal$lot_num$exp_dt$nda_num$dose_amt$dose_unit$dose_form$dose_freq'
+#            1         2      3        4        5        6       7       8     9        10           11            12     13     14      15     16      17       18        19        20
+F[drug16q1]='$0'
+
+# == INDI ==
+H[indi12q3]='primaryid$drug_seq$indi_pt'
+#            1         2        3
+# 1 (+caseid) 2 3
+F[indi12q3]='$1,X,$2,$3'
+#    NOTE: Is `drug_seq` the same as `indi_drug_seq`? Assuming yes.
+
+H[indi16q1]='primaryid$caseid$indi_drug_seq$indi_pt'
+#            1         2      3             4
+F[indi16q1]='$0'
+
+# == OUTC == 
+H[outc12q3]='primaryid$outc_cod'
+#            1         2
+# 1 (+caseid) 2
+F[outc12q3]='$1,X,$2'
+
+H[outc16q1]='primaryid$caseid$outc_cod'
+#            1         2      3
+F[outc16q1]='$0'
+
+# == REAC ==
+H[reac12q3]='primaryid$pt'
+#            1         2
+# 1 (+caseid) 2 (+drug_rec_act)
+F[reac12q3]='$1,X,$2,X'
+
+H[reac14q2]='primaryid$caseid$pt'
+#            1         2      3
+# 1 2 3 (+drug_rec_act)
+F[reac14q2]='$1,$2,$3,X'
+ 
+H[reac16q1]='primaryid$caseid$pt$drug_rec_act'
+#            1         2      3  4
+F[reac16q1]='$0'
+
+# == RPSR ==
+H[rpsr12q3]='primaryid$rpsr_cod'
+#            1         2
+# 1 (+caseid) 3
+F[rpsr12q3]='$1,X,$2'
+
+H[rpsr16q1]='primaryid$caseid$rpsr_cod'
+#            1         2      3
+F[rpsr16q1]='$0'
+
+# == THER ==
+H[ther12q3]='primaryid$drug_seq$start_dt$end_dt$dur$dur_cod'
+#            1         2        3        4      5   6
+# 1 (+caseid) 2 3 4 6
+F[ther12q3]='$1,X,$2,$3,$4,$5,$6'
+#    NOTE: Is `drug_seq` the same as `dsg_drug_seq`? Assuming yes.
+
+H[ther16q1]='primaryid$caseid$dsg_drug_seq$start_dt$end_dt$dur$dur_cod'
+#            1         2      3            4        5      6   7
+F[ther16q1]='$0'
+
+# Note that the source data contain many formating errors.
+# This one is especially awful and confusing.
+# --------------------------------------------------------------
+# $ head -n2 /data/faers/all/original_faers_tables/outc09q3.txt
+# ISR$OUTC_COD
+# 6142909$HO$
+# --------------------------------------------------------------
+# Note that the header (original file from FDA) shows clearly two fields
+# and they are separated by one separator as one would expect. But the
+# records themselves have two separators!
+#
+# I found this because the outc??q?.txt file actually shrank when I ran
+# this script on it. That's because the script correctly removes the
+# superfluous separator.
+#
+# The important fact here - just because you grep 6142909 and find this
+# record with two separators that does not mean there are three fields.
+# You must check the headers!
+# =========================================================================
+
+function get_clean_header {
+    # The headers in the FDA files are insanely inconsistent. This
+    # function just hammers the anomalies into shape. This allows, for
+    # example, that only a lower case header needs to be defined even
+    # though the data contain both upper and lower case variants.
+    #
+    # Here's what this function cleans up.
+    # * Lower case for everything.
+    # * Remove all erroneous spaces (there is at least one, N.B. demo12q4 " rept_dt").
+    # * Change this for consistency: s/isr/primaryid/
+    # * Was 12q4 entered by hand by a monkey?
+    #  - "<feff>" (UTF zero-width non-breaking space) in first bytes of drug12q4.
+    #  - Fix s/lot_nbr/lot_num/ in drug12q4.
+    #  - Fix s/outc_code/outc_cod/ in outc12q4.
+    head -n1 $1 \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed \
+    -e "s/ //g" \
+    -e "s/isr/primaryid/" \
+    -e "s/outc_code/outc_cod/" \
+    -e 's/^.primaryid/primaryid/' \
+    -e 's/lot_nbr/lot_num/'
+}
+
+function check_header {
+    # Iterate through all known headers in H.
+    # Return the fix F of the first that matches.
+    # Returns nothing if no matches.
+    for H1 in "${!H[@]}"
+    do
+        if [ "$1" == "${H[${H1}]}" ]
+        then
+            echo "${F[${H1}]}"
+            return
+        fi
+    done
+}
+
+# ============================= MAIN ======================================
+if [ "$#" == "0" ] || [ "$1" == "-h" ]; then echo "$USAGE" ; exit 1 ; fi
+# Process all files listed as arguments.
+while (( "$#" ))
+do
+    FN=$1
+    # Is this even a file?
+    if [ -f ${FN} ]
+    then
+        echo "Checking: $1"
+        AWKARGS=$(check_header $(get_clean_header $1))
+        # Proceed only if the header matched something that is known.
+        # I.e. It should ignore random non-FDA files.
+        if [ -n "${AWKARGS}" ]
+        then
+            if [ "${AWKARGS}" == "$0" ]
+            then
+                # No awk needed - this file is already in the latest format.
+                cp ${FN} ${FN}.orig # Comment this out if you don't need a complete set of originals.
+            else
+                # A header has been matched which requires awk to modify the field layout.
+                AWKFORM=$(echo ${AWKARGS} | sed -e 's/[^,][^,]*/%s/g' -e 's/,/$/g' -e 's/^/"/' -e 's/$/\\n"/')
+                echo "Fixing $1..."
+                # Make sure a backup can be made. Awk will redirect output back to specified filename.
+                BFN=$(basename "${FN}")
+                if ls ${BFN} 2>/dev/null # Is there one already in the current directory?
+                then
+                    #TODO: Check that the source is not other directory but an exisiting copy is also present in this directory. :-/
+                    OFN="${FN}.orig" # Old filename preserves original.
+                    mv ${FN} ${OFN}  # Make backup copy since source files are in this directory.
+                else
+                    OFN=${FN} # Old files are left alone in their own directory.
+                    FN=${BFN} # New files have the same name, but in the current directory.
+                fi
+                echo "Backfilling columns for ${FN} with..."
+                echo awk 'BEGIN{FS="$"}{printf('${AWKFORM}','${AWKARGS}')}' $1
+                awk 'BEGIN{FS="$"}{printf('${AWKFORM}','${AWKARGS}')}' ${OFN} > ${FN}
+                # echo "Removing original ${FN}..."
+                # rm ${FN}.orig
+            fi
+        fi
+    else
+        echo "Error - This does not seem to be a file: $1"
+    fi
+    shift
+done
+
+# == Checking the results.
+# The following command will go through each file and take the 20th
+# line and count how many "$" are present. If within each type of file
+# (drug, demo, reac, etc) there are discrepancies, then something
+# obviously went wrong.
+#
+#   for F in *.txt ; do echo -n "${F}: "; sed -n "20p" ${F} | awk '{gsub("[^$]",""); print length();}' ; done
+
+# == Concatenating all quarterly files into one master file.
+# Note that a simple `cat` won't work because you need to exclude the first (header) lines.
+# This command will do the job for all 7 file types.
+#
+#  time for T in demo drug indi outc reac rpsr ther ; do for F in ${T}*; do echo ${F}; sed '1d' ${F} >> ${T}_ALL.txt ; done ; done
+#
+# It might also be a good idea to compress these files. 
+# All uncompressed data weighs in at 4.7GB; compressed it is 884MB.
+#
+#  time for T in demo drug indi outc reac rpsr ther ; do echo ${T} ; gzip ${T}_ALL.txt ; done

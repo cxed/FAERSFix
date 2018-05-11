@@ -1,0 +1,200 @@
+#!/bin/bash
+# faers_acquire - Chris Edwards - 2016-08-17
+#
+# This simple program is really a succinct description of _where_ at the
+# FDA.gov one can find the source data for the FDA Adverse Effect Reporting
+# System. The reason this is necessary is because the FDA is not especially
+# consistent about file names and directories, etc. This file creates a map
+# between a file name that will be used by sane people and where that file can
+# be acquired from the FDA madhouse. 
+# 
+# This script will attempt to download *all* of the FAERS and AERS data that we
+# know about. It will download to your current directory. The download will
+# take a long time and require a lot of space. Make sure you have enough! (2.1G
+# at the time of 2016q1, about 30 minutes).
+#
+# This program just defines an associative array (map, dict, hash) called D
+# which contains the name of the file you want locally as the index and the
+# sufficient information to obtain it from the FDA as a value. 
+#
+# To change the name of the files you download, simply modify the keys of the
+# array.
+#
+# To refrain from downloading certain files, simply comment out the line where
+# the file is added to the array. By default all files are considered.
+#
+# To add new subsequent future FDA additions to the data, just create a new
+# array assignment with the name of the file you want (e.g. faers_2016q2) and
+# the location of the file.
+
+# Look for new entries here. (Though this is likely to move erratically.)
+# https://www.fda.gov/Drugs/GuidanceComplianceRegulatoryInformation/Surveillance/AdverseDrugEffects/ucm082193.htm
+
+BASE="http://www.fda.gov/downloads/Drugs/GuidanceComplianceRegulatoryInformation/Surveillance/"
+declare -A D  # An associative array where keys=local names, values=download locations.
+
+#== ASCII ('$' separated record files in zip archives)
+#=== 2017
+D[faers_2017q3]="UCM590948.zip"                    # FAERS_ASCII_2017q3.zip - 42.1MB 
+D[faers_2017q2]="UCM578242.zip"                    # FAERS_ASCII_2017q2.zip - 41.3MB 
+D[faers_2017q1]="UCM562290.zip"                    # FAERS_ASCII_2017q1.zip - 42.6MB 
+#=== 2016
+D[faers_2016q4]="UCM546946.zip"                    # FAERS_ASCII_2016q4.zip - 39.2MB
+D[faers_2016q3]="AdverseDrugEffects/UCM534900.zip" # FAERS_ASCII_2016q3.zip - 40.6MB
+D[faers_2016q2]="UCM521951.zip"                    # FAERS_ASCII_2016q2.zip - 42.3MB
+D[faers_2016q1]="UCM509489.zip"                    # FAERS_ASCII_2016q1.zip - 43.7MB 
+#=== 2015
+D[faers_2015q4]="AdverseDrugEffects/UCM492340.zip" # FAERS_ASCII_2015q4.zip - 39.7MB 
+D[faers_2015q3]="UCM477190.zip"                    # FAERS_ASCII_2015q3.zip - 44.7MB 
+D[faers_2015q2]="UCM463272.zip"                    # FAERS_ASCII_2015q2.zip - 36.4MB 
+D[faers_2015q1]="UCM458083.zip"                    # FAERS_ASCII_2015q1.zip - 37.0MB 
+#=== 2014
+D[faers_2014q4]="UCM451489.zip"                    # FAERS_ASCII_2014q4.zip - 26.8MB 
+D[faers_2014q3]="UCM443579.zip"                    # FAERS_ASCII_2014q3.zip - 27.0MB 
+D[faers_2014q2]="UCM429323.zip"                    # FAERS_ASCII_2014q2.zip - 23.7MB 
+D[faers_2014q1]="UCM419914.zip"                    # FAERS_ASCII_2014q1.zip - 27.9MB 
+#=== 2013
+D[faers_2013q4]="UCM409890.zip"                    # FAERS_ASCII_2013q4.zip - 24.4MB
+D[faers_2013q3]="UCM399592.zip"                    # FAERS_ASCII_2013q3.zip - 21.0MB 
+D[faers_2013q2]="AdverseDrugEffects/UCM395994.zip" # FAERS_ASCII_2013q2.zip - 19.9MB 
+D[faers_2013q1]="UCM387233.zip"                    # FAERS_ASCII_2013q1.zip - 23.7MB 
+#=== 2012 - Change from AERS to FAERS in q4
+D[faers_2012q4]="AdverseDrugEffects/UCM364757.zip" # FAERS_ASCII_2012q4.zip - 26.3MB
+D[aers_2012q3]="AdverseDrugEffects/UCM337616.zip"  # AERS_ASCII_2012q3.zip  - 15.3MB
+D[aers_2012q2]="UCM319844.zip"                     # AERS_ASCII_2012q2.zip  - 24.7MB
+D[aers_2012q1]="AdverseDrugEffects/UCM307572.zip"  # AERS_ASCII_2012q1.zip  - 25.4MB
+
+# October 2011 to December 2011
+D[aers_2011q4]="AdverseDrugEffects/UCM300452.zip"  # AERS_ASCII_2011q4.zip - 22.5MB
+D[aers_2011q3]="AdverseDrugEffects/UCM287845.zip"  # AERS_ASCII_2011q3.zip - 22.3MB
+D[aers_2011q2]="AdverseDrugEffects/UCM278762.zip"  # AERS_ASCII_2011q2.zip - 22.4MB
+D[aers_2011q1]="AdverseDrugEffects/UCM270803.zip"  # AERS_ASCII_2011q1.zip - 20.3MB
+
+D[aers_2010q4]="AdverseDrugEffects/UCM251745.zip"  # AERS_ASCII_2010q4.zip - 19.2MB
+D[aers_2010q3]="AdverseDrugEffects/UCM244691.zip"  # AERS_ASCII_2010q3.zip - 21.8MB
+D[aers_2010q2]="AdverseDrugEffects/UCM232595.zip"  # AERS_ASCII_2010q2.zip - 17.3MB
+D[aers_2010q1]="AdverseDrugEffects/UCM220802.zip"  # AERS_ASCII_2010q1.zip - 15.5MB
+
+D[aers_2009q4]="AdverseDrugEffects/UCM213485.zip"  # AERS_ASCII_2009q4.zip - 15.5MB
+D[aers_2009q3]="AdverseDrugEffects/UCM197917.zip"  # AERS_ASCII_2009q3.zip - 15.0MB
+D[aers_2009q2]="AdverseDrugEffects/UCM186488.zip"  # AERS_ASCII_2009q2.zip - 13.6MB
+D[aers_2009q1]="AdverseDrugEffects/UCM173888.zip"  # AERS_ASCII_2009q1.zip - 12.4MB
+
+D[aers_2008q4]="AdverseDrugEffects/UCM150381.zip"  # AERS_ASCII_2008q4.zip - 12.8MB
+D[aers_2008q3]="AdverseDrugEffects/ucm085780.zip"  # AERS_ASCII_2008q3.zip - 11.3MB
+D[aers_2008q2]="AdverseDrugEffects/ucm085785.zip"  # AERS_ASCII_2008q2.zip - 11.3MB
+D[aers_2008q1]="AdverseDrugEffects/ucm085793.zip"  # AERS_ASCII_2008q1.zip - 11.3MB
+
+D[aers_2007q4]="AdverseDrugEffects/ucm085809.zip"  # AERS_ASCII_2007q4.zip - 11.3MB
+D[aers_2007q3]="AdverseDrugEffects/ucm083816.zip"  # AERS_ASCII_2007q3.zip -  9.7MB
+D[aers_2007q2]="AdverseDrugEffects/ucm083983.zip"  # AERS_ASCII_2007q2.zip -  9.5MB
+D[aers_2007q1]="AdverseDrugEffects/ucm084042.zip"  # AERS_ASCII_2007q1.zip -  9.5MB
+
+D[aers_2006q4]="AdverseDrugEffects/ucm084161.zip"  # AERS_ASCII_2006q4.zip -  9.0MB
+D[aers_2006q3]="AdverseDrugEffects/ucm084206.zip"  # AERS_ASCII_2006q3.zip -  8.5MB
+D[aers_2006q2]="AdverseDrugEffects/ucm084217.zip"  # AERS_ASCII_2006q2.zip - 10.4MB
+D[aers_2006q1]="AdverseDrugEffects/ucm084242.zip"  # AERS_ASCII_2006q1.zip - 10.4MB
+
+D[aers_2005q4]="AdverseDrugEffects/ucm084259.zip"  # AERS_ASCII_2005q4.zip -  9.7MB
+# (FDA NOTE FOR AERS_ASCII_2005q3.zip - New field added; Please see readme.doc in zipped file)
+D[aers_2005q3]="AdverseDrugEffects/ucm084277.zip"  # AERS_ASCII_2005q3.zip -  9.3MB 
+D[aers_2005q2]="AdverseDrugEffects/ucm084916.zip"  # AERS_ASCII_2005q2.zip -  9.5MB
+D[aers_2005q1]="AdverseDrugEffects/ucm084918.zip"  # AERS_ASCII_2005q1.zip -  8.5MB
+
+D[aers_2004q4]="AdverseDrugEffects/ucm084920.zip"  # AERS_ASCII_2004q4.zip -  8.1MB
+D[aers_2004q3]="AdverseDrugEffects/ucm084922.zip"  # AERS_ASCII_2004q3.zip -  8.1MB
+D[aers_2004q2]="AdverseDrugEffects/ucm084924.zip"  # AERS_ASCII_2004q2.zip -  7.1MB
+D[aers_2004q1]="AdverseDrugEffects/ucm084927.zip"  # AERS_ASCII_2004q1.zip -  7.2MB
+
+#== XML/SGML (in zip archives)
+#=== 2017
+D[faers_xml_2017q3]="UCM590950.zip"                    # FAERS_XML_2017q3.zip - 80.1MB 
+D[faers_xml_2017q2]="UCM578243.zip"                    # FAERS_XML_2017q2.zip - 76.1MB 
+D[faers_xml_2017q1]="UCM562291.zip"                    # FAERS_XML_2017q1.zip - 80.8MB 
+#=== 2016
+D[faers_xml_2016q4]="UCM546944.zip"                    # FAERS_XML_2016q4.zip - 72.3MB
+D[faers_xml_2016q3]="AdverseDrugEffects/UCM534904.zip" # FAERS_XML_2016q3.zip - 76.9MB
+D[faers_xml_2016q2]="UCM521953.zip"                    # FAERS_XML_2016q2.zip - 68.9MB 
+D[faers_xml_2016q1]="UCM509491.zip"                    # FAERS_XML_2016q1.zip - 71.5MB 
+#=== 2015
+D[faers_xml_2015q4]="AdverseDrugEffects/UCM492346.zip" # FAERS_XML_2015q4.zip - 65.8MB 
+D[faers_xml_2015q3]="UCM477218.zip"                    # FAERS_XML_2015q3.zip - 73.3MB
+D[faers_xml_2015q2]="UCM463278.zip"                    # FAERS_XML_2015q2.zip - 59.9MB 
+D[faers_xml_2015q1]="UCM458079.zip"                    # FAERS_XML_2015q1.zip - 60.7MB 
+#=== 2014
+D[faers_xml_2014q4]="UCM451487.zip"                    # FAERS_XML_2014q4.zip - 45.4MB 
+D[faers_xml_2014q3]="UCM443582.zip"                    # FAERS_XML_2014q3.zip - 46.1MB 
+D[faers_xml_2014q2]="UCM429319.zip"                    # FAERS_XML_2014q2.zip - 37.2MB 
+D[faers_xml_2014q1]="UCM419919.zip"                    # FAERS_XML_2014q1.zip - 43.7MB 
+#=== 2013
+D[faers_xml_2013q4]="UCM409968.zip"                    # FAERS_XML_2013q4.zip - 38.6MB 
+D[faers_xml_2013q3]="UCM399593.zip"                    # FAERS_XML_2013q3.zip - 33.4MB 
+D[faers_xml_2013q2]="AdverseDrugEffects/UCM395998.zip" # FAERS_XML_2013q2.zip - 31.4MB 
+D[faers_xml_2013q1]="UCM387234.zip"                    # FAERS_XML_2013q1.zip - 37.2MB 
+#=== 2012 - Change from AERS to FAERS and SGML to XML in q4
+D[faers_xml_2012q4]="AdverseDrugEffects/UCM364761.zip" # FAERS_XML_2012q4.zip - 41.7MB
+D[aers_sgml_2012q3]="AdverseDrugEffects/UCM337617.zip" # AERS_SGML_2012q3.zip - 18.6MB
+D[aers_sgml_2012q2]="UCM319846.zip"                    # AERS_SGML_2012q2.zip - 29.5MB
+D[aers_sgml_2012q1]="AdverseDrugEffects/UCM307573.zip" # AERS_SGML_2012q1.zip - 30.1MB
+# === 2011
+D[aers_sgml_2011q4]="AdverseDrugEffects/UCM300453.zip" # AERS_SGML_2011q4.zip - 26.8MB
+D[aers_sgml_2011q3]="AdverseDrugEffects/UCM287846.zip" # AERS_SGML_2011q3.zip - 27.8MB
+D[aers_sgml_2011q2]="AdverseDrugEffects/UCM278764.zip" # AERS_SGML_2011q2.zip - 26.5MB
+D[aers_sgml_2011q1]="AdverseDrugEffects/UCM270805.zip" # AERS_SGML_2011q1.zip - 23.8MB
+# === 2010
+D[aers_sgml_2010q4]="AdverseDrugEffects/UCM251746.zip" # AERS_SGML_2010q4.zip - 22.4MB
+D[aers_sgml_2010q3]="AdverseDrugEffects/UCM244696.zip" # AERS_SGML_2010q3.zip - 25.2MB
+D[aers_sgml_2010q2]="AdverseDrugEffects/UCM232599.zip" # AERS_SGML_2010q2.zip - 20.5MB
+D[aers_sgml_2010q1]="AdverseDrugEffects/UCM220803.zip" # AERS_SGML_2010q1.zip - 18.3MB
+# === 2009
+D[aers_sgml_2009q4]="AdverseDrugEffects/UCM213486.zip" # AERS_SGML_2009q4.zip - 18.1MB
+D[aers_sgml_2009q3]="AdverseDrugEffects/UCM197919.zip" # AERS_SGML_2009q3.zip - 17.5MB
+D[aers_sgml_2009q2]="AdverseDrugEffects/UCM186489.zip" # AERS_SGML_2009q2.zip - 16.2MB
+D[aers_sgml_2009q1]="AdverseDrugEffects/UCM173889.zip" # AERS_SGML_2009q1.zip - 14.5MB
+# === 2008
+D[aers_sgml_2008q4]="AdverseDrugEffects/UCM150386.zip" # AERS_SGML_2008q4.zip - 14.9MB 
+D[aers_sgml_2008q3]="AdverseDrugEffects/ucm085782.zip" # AERS_SGML_2008q3.zip - 13.0MB
+D[aers_sgml_2008q2]="AdverseDrugEffects/ucm085789.zip" # AERS_SGML_2008q2.zip - 13.0MB
+D[aers_sgml_2008q1]="AdverseDrugEffects/ucm085799.zip" # AERS_SGML_2008q1.zip - 13.0MB
+# === 2007
+D[aers_sgml_2007q4]="AdverseDrugEffects/ucm085815.zip" # AERS_SGML_2007q4.zip - 13.0MB
+D[aers_sgml_2007q3]="AdverseDrugEffects/ucm083854.zip" # AERS_SGML_2007q3.zip - 11.4MB
+D[aers_sgml_2007q2]="AdverseDrugEffects/ucm083998.zip" # AERS_SGML_2007q2.zip - 11.0MB
+D[aers_sgml_2007q1]="AdverseDrugEffects/ucm084155.zip" # AERS_SGML_2007q1.zip - 11.0MB
+# === 2006
+D[aers_sgml_2006q4]="AdverseDrugEffects/ucm084172.zip" # AERS_SGML_2006q4.zip - 11.0MB
+D[aers_sgml_2006q3]="AdverseDrugEffects/ucm084210.zip" # AERS_SGML_2006q3.zip -  9.8MB
+D[aers_sgml_2006q2]="AdverseDrugEffects/ucm084234.zip" # AERS_SGML_2006q2.zip - 12.0MB
+D[aers_sgml_2006q1]="AdverseDrugEffects/ucm084252.zip" # AERS_SGML_2006q1.zip - 12.0MB
+# === 2005
+D[aers_sgml_2005q4]="AdverseDrugEffects/ucm084915.zip" # AERS_SGML_2005q4.zip - 11.0MB
+D[aers_sgml_2005q3]="AdverseDrugEffects/ucm084281.zip" # AERS_SGML_2005q3.zip - 10.8MB
+D[aers_sgml_2005q2]="AdverseDrugEffects/ucm084917.zip" # AERS_SGML_2005q2.zip - 10.7MB
+D[aers_sgml_2005q1]="AdverseDrugEffects/ucm084919.zip" # AERS_SGML_2005q1.zip -  9.6MB
+# === 2004
+D[aers_sgml_2004q4]="AdverseDrugEffects/ucm084921.zip" # AERS_SGML_2004q4.zip -  9.1MB
+D[aers_sgml_2004q3]="AdverseDrugEffects/ucm084923.zip" # AERS_SGML_2004q3.zip -  9.0MB
+D[aers_sgml_2004q2]="AdverseDrugEffects/ucm084926.zip" # AERS_SGML_2004q2.zip -  8.0MB
+D[aers_sgml_2004q1]="AdverseDrugEffects/ucm084928.zip" # AERS_SGML_2004q1.zip -  8.2MB
+
+for F in "${!D[@]}"
+do
+    # Check to see if the file is already present.
+    if [ ! -e "${F}.zip" ] # || true # Remove commenting if you really want a complete refresh.
+    then
+        CMD="wget -O${F}.zip ${BASE}${D[$F]}"
+        echo $CMD
+        if [ -n "$1" ]
+        then
+            eval $CMD
+        fi
+    fi
+done
+
+if [ -z "$1" ]
+then
+    echo "=========================================================="
+    echo "If this just printed out the commands but did not run them"
+    echo "and you are ready to actually download, rerun with any argument."
+    echo "    $0 ok"
+fi

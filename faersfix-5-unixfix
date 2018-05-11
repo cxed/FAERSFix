@@ -1,0 +1,135 @@
+#!/bin/bash
+# faers_unixfix - Chris X Edwards - 20160914
+
+function show_usage {
+cat <<EOUSAGE
+Usage:
+
+    $0 [-h]|[-a]|[-2bBDsl] file [...fileN]
+
+       -h = This help message.
+       -a = Do all fixes (-bB2sSl).
+       -b = Replace dollar sign delimiter with pipe (bar separated).
+       -B = Remove spaces adjacent to bar field separator.
+       -D = Remove spaces adjacent to dollar field separator.
+       -2 = Remove first line if it is a header.
+       -s = Replace multiple consecutive spaces with one space.
+       -S = Sort.
+       -e = Remove empty spaces from space only fields.
+       -l = Convert to lower case.
+
+This program will apply any simple formatting improvements that can
+be done easily with normal Unix tools. It is a good place to add any 
+pre-processing steps that can apply to whole text files.
+
+With no options, the program will output the complete command line it
+would use if given the -a option and no actual processing will be
+initiated.
+EOUSAGE
+} # End function: show_usage
+
+function handle_options_getopts {
+    # Option letters followed by ":" mean has an OPTARG.
+    while getopts "hab2selBSD" OPTION
+    do
+        case ${OPTION} in
+            a) readonly SRT="y" BSV="y" TAIL2="y" SP2="y" SPF="y" BSP="y" LC="y"; unset T; break;;
+            b) readonly BSV="y"; unset T;;
+            B) readonly BSP="y"; unset DSP; unset T;;
+            D) readonly DSP="y"; unset BSP; unset T;;
+            2) readonly TAIL2="y"; unset T;;
+            s) readonly SP2="y"; unset T;;
+            S) readonly SRT="y"; unset T;;
+            e) readonly SPF="y"; unset T;;
+            l) readonly LC="y"; unset T;;
+            h) show_usage && exit 0;;
+        esac
+    done
+    shift $((OPTIND - 1)) # Leave behind remaining arguments.
+    PARGS=$@
+} # End function: handle_options_getopts
+
+function display_options {
+    [ "${TAIL2}" ] && echo "Remove any header lines."
+    [ "${BSV}" ] && echo "Convert to bar-separated values and remove other separators (:;) too."
+    [ "${SP2}" ] && echo "Collapse consecutive spaces."
+    [ "${SPF}" ] && echo "Collapse space only fields."
+    [ "${BSP}" ] && echo "Remove leading and trailing spaces from field (|)."
+    [ "${DSP}" ] && echo "Remove leading and trailing spaces from field ($)."
+    [ "${LC}" ] && echo "Make everything lower case."
+    echo -n "Files: "
+    local F ; for F in ${PARGS[@]} ; do echo -n "${F} " ; done
+    echo
+} # End function: display_options
+
+function check_file_type {
+    unset IN
+    local FN=$1
+    [ -f ${FN} ] || return
+    IN="cat"
+    if gzip -l "${FN}" >/dev/null 2>/dev/null; then IN="gzip -cd"; fi
+}
+
+function prep_temp_mv {
+    local TF TD
+    TD=$(dirname ${FN})
+    TF=$(mktemp --tmpdir=${TD} ${T}) # TAKE THIS OUT BEFORE ACTUALLY USING.
+    if [ "${IN}" == "gzip -cd" ]; then
+        echo -n "| gzip -c "
+    fi
+    echo "> ${TF} ; chmod --reference=${FN} ${TF} ; mv ${TF} ${FN}"
+} # End function: prep_temp_mv
+
+function build_pipeline {
+    # Holy god, what a mess...
+    DQ='"'
+    SQ="'"
+    DS='$'
+    STAR='*'
+    check_file_type ${FN}
+    [ -z "${IN}" ] && return
+    PL[0]="${IN} ${FN} "
+    [ "${TAIL2}" ] && PL[1]=' tail -n+2 '    # Quicker than `sed '1d'`
+    [ "${SP2}" ] && PL[2]=" sed ${SQ}s/   ${STAR}/ /g${SQ} "
+    [ "${SPF}" ] && PL[3]=" sed ${SQ}s/[${DS}]  *[${DS}]/${DS}${DS}/g${SQ} "
+    [ "${BSV}" ] && PL[4]=" tr ${SQ}:|;${SQ} ${SQ}-/+${SQ} "
+    [ "${BSV}" ] && PL[5]=" sed ${SQ}s/[${DS}]/|/g${SQ} "
+    [ "${LC}" ] && PL[6]=' tr "[:upper:]" "[:lower:]" '
+    [ "${BSP}" ] && PL[7]=" sed -e${SQ}s/[|]  ${STAR}/|/g${SQ}  -e ${SQ}s/  ${STAR}[|]/|/g${SQ} "
+    [ "${DSP}" ] && PL[8]=" sed -e${SQ}s/[${DS}]  ${STAR}/${DS}/g${SQ}  -e ${SQ}s/  ${STAR}[${DS}]/${DS}/g${SQ} "
+    [ "${SRT}" ] && PL[9]=" sort "
+    echo -n "${PL[0]}"
+    local N; for N in {1..9}; do 
+        [ "${PL[$N]}" ] && echo -n '|'"${PL[$N]}"
+    done
+    echo $(prep_temp_mv)
+} # End function: build_pipeline
+
+# ======================= MAIN ======================= 
+readonly ARGS="$@"
+T="--dry-run"     # Set testing only by default.
+
+handle_options_getopts ${ARGS}
+display_options
+
+# If testing still active, then turn on everything.
+[ "${T}" ] && readonly SRT="y" BSV="y" TAIL2="y" SP2="y" SPF="y" LC="y" BSP="y"
+
+for FN in ${PARGS[@]}; do
+    echo "====== Processing ${FN} ======"
+    CMD=$(build_pipeline)
+    if [ "${CMD}" ]; then # Pipeline comes back empty if file is missing.
+        if [ "${T}" ]; then # Testing only.
+            echo "${CMD}"
+        else                # Not just testing. Do the command.
+            echo "${CMD}"   # Perhaps remove this.
+            eval "${CMD}"
+        fi
+    else
+        echo "Can not find file: ${FN}"
+    fi
+done
+[ "${T}" ] && echo "Test only. No files were modified. Use \`$0 -a\` to effect changes. Or \`-h\` for help."
+
+# Is the PID showing up in there somehow????????!!!!!!!!!!!!!!
+echo $$
