@@ -27,10 +27,10 @@ a complete breakdown in the basic format of the data. Generally the
 text files are a collection of records separated by a record
 separator; note that as downloaded, a freshly unpacked text file
 will use DOS CR/LF line endings as the record separator. Each record
-is separated into feilds, by `$` as downloaded. 
+is separated into fields, by `$` as downloaded. 
 
 A major problem arises when the data itself contain either the field
-seperator or record seperator. This manifests itself as an extra `$`
+separator or record separator. This manifests itself as an extra `$`
 for field separators incorrectly used and broken lines where an
 extra record separator (CR/LF) is used. The latter case creates
 records that seem to have, roughly, half of the number of fields for
