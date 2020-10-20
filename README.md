@@ -6,7 +6,7 @@ FAERSFix
 This GitHub repository is a back up of my FAERSFix scripts. 
 
 The
-[FDA Adverse Effect Reporting System](https://www.fda.gov/Drugs/GuidanceComplianceRegulatoryInformation/Surveillance/AdverseDrugEffects/ucm082193.htm)
+[FDA Adverse Event Reporting System](https://www.fda.gov/Drugs/GuidanceComplianceRegulatoryInformation/Surveillance/AdverseDrugEffects/ucm082193.htm)
 is a horrifically dysfunctional quagmire of shockingly bad data. The
 data is not just bad for severe epistemological reasons, it is also
 poorly organized and riddled with flagrant absurd errors.

@@ -2,7 +2,7 @@
 # faers_acquire - Chris Edwards - 2016-08-17
 #
 # This simple program is really a succinct description of _where_ at the
-# FDA.gov one can find the source data for the FDA Adverse Effect Reporting
+# FDA.gov one can find the source data for the FDA Adverse Event Reporting
 # System. The reason this is necessary is because the FDA is not especially
 # consistent about file names and directories, etc. This file creates a map
 # between a file name that will be used by sane people and where that file can
